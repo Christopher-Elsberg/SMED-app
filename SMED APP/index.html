@@ -1007,11 +1007,7 @@ function toCsv(rows){return rows.map(r=>r.map(c=>`"${String(c??'').replaceAll('"
     <iframe id="sop-preview-frame" class="sop-preview-frame"></iframe>
   </div>
 </div>
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js');
-}
-</script>
+
 
 </body></html>`;downloadBlob(html,`${safeFileName(state.analysis.id)}_Resultater.html`,'text/html;charset=utf-8')}function downloadSopHtml(){renderSop();let html=`<!DOCTYPE html><html lang="${currentLanguage}"><head><meta charset="UTF-8"><title>${escapeHtml(state.sop.number)}</title><style>body{font-family:Arial;margin:28px;color:#1f2937;line-height:1.55}table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f1f5f9}/* --- All approvals streamlined action cell --- */
 .approval-actions-cell{white-space:nowrap}
