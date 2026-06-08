@@ -173,7 +173,49 @@
 </div><div class="file-note approval-table-note" data-i18n="approvalLatestVersionOnly"></div><div class="table-scroll" style="margin-top:14px"><table class="professional-table"><thead><tr><th data-i18n="thAnalysis"></th><th data-i18n="thRequester"></th><th data-i18n="thOwner"></th><th data-i18n="thStatus"></th><th data-i18n="thRequestedAt"></th><th data-i18n="thRequestComment"></th><th data-i18n="thDecisionComment"></th><th data-i18n="thSopDoc"></th></tr></thead><tbody id="all-approvals-table"></tbody></table></div><div id="all-approvals-error" class="file-note" style="color:#991b1b;margin-top:10px"></div></div></section>
 <section id="archive" class="section"><div class="grid grid-2"><div class="card"><h2 data-i18n="onlineArchiveTitle"></h2><p class="muted small" data-i18n="onlineArchiveLead"></p><div class="button-row"><button class="primary" onclick="saveCurrentToOnlineArchive()" data-i18n="btnSaveOnline"></button><button class="secondary" onclick="refreshOnlineArchive()" data-i18n="btnRefreshOnline"></button></div><div id="online-archive-msg" class="file-note" style="margin-top:10px"></div><div style="margin-top:12px" id="online-archive-list"></div></div><div class="card"><h2 data-i18n="archiveCurrent"></h2><p class="note" data-i18n="archiveNote"></p><div class="button-row"><button class="primary" onclick="saveCurrentToArchive()" data-i18n="btnSaveCurrentLocal"></button><button class="secondary" onclick="downloadExcelCsvPdfPack()" data-i18n="btnDownloadPack"></button><button class="secondary" onclick="downloadCurrentAnalysisJson()" data-i18n="btnDownloadJson"></button><button class="ghost" onclick="downloadCurrentBundle()" data-i18n="btnDownloadBundle"></button></div><p class="file-note" data-i18n="saveLocationNote"></p></div><div class="card"><h2 data-i18n="importAnalysis"></h2><p class="muted small" data-i18n="importNote"></p><input id="import-file" type="file" accept=".json,application/json" onchange="importAnalysisJson(event)"></div></div><div class="card"><h2 data-i18n="localArchive"></h2><div id="archive-list"></div></div></section>
 <section id="dashboard" class="section"><div class="card"><h2 data-i18n="dashboardTitle"></h2><p class="muted" data-i18n="dashboardLead"></p></div><div class="dashboard-kpis"><div class="compact-kpi"><div class="label" data-i18n="dashboardActiveActions"></div><div class="value" id="dashboard-active-actions">0</div><div class="file-note" data-i18n="dashboardActiveActionsNote"></div></div><div class="compact-kpi"><div class="label" data-i18n="dashboardRealizedSaving"></div><div class="value" id="dashboard-realized-saving">0 min</div><div class="file-note" data-i18n="dashboardRealizedSavingNote"></div></div></div><div id="dashboard-error" class="file-note" style="color:#991b1b;margin-top:14px"></div></section>
-<section id="setup" class="section"><div class="setup-manager"><div class="card"><h2 data-i18n="setupMasterdata"></h2><label data-i18n="chooseList"></label><select id="setup-list-select" onchange="renderSetupManager()"></select><div style="margin-top:14px"><label data-i18n="newValue"></label><input id="setup-new-value" data-i18n-placeholder="phNewValue" onkeydown="handleSetupKey(event)"></div><div class="button-row"><button class="primary" onclick="addSetupItem()" data-i18n="add"></button><button class="ghost" onclick="resetSetupDefaults()" data-i18n="resetToDefaults"></button></div><p class="file-note" data-i18n="setupNote"></p></div><div class="card"><h2 id="setup-current-title"></h2><div id="setup-current-list"></div></div></div><div class="grid grid-2"><div class="card"><h2 data-i18n="standardLists"></h2><div id="setup-overview"></div></div><div class="card"><h2 data-i18n="nextVersion"></h2><table><thead><tr><th data-i18n="thArea"></th><th data-i18n="thRecommendation"></th></tr></thead><tbody id="next-version-table"></tbody></table></div></div><div class="card"><h2 data-i18n="realSolutionReq"></h2><p class="muted" data-i18n="realSolutionText"></p></div></section>
+<section id="setup" class="section">
+  <div class="setup-manager">
+    <div class="card">
+      <h2 data-i18n="setupMasterdata"></h2>
+      <label data-i18n="chooseList"></label>
+      <select id="setup-list-select" onchange="renderSetupManager()"></select>
+      <div style="margin-top:14px">
+        <label data-i18n="newValue"></label>
+        <input id="setup-new-value" data-i18n-placeholder="phNewValue" onkeydown="handleSetupKey(event)">
+      </div>
+      <div class="button-row">
+        <button class="primary" onclick="addSetupItem()" data-i18n="add"></button>
+        <button class="ghost" onclick="resetSetupDefaults()" data-i18n="resetToDefaults"></button>
+      </div>
+      <p class="file-note" data-i18n="setupNote"></p>
+    </div>
+
+    <div class="card">
+      <h2 id="setup-current-title"></h2>
+      <div id="setup-current-list"></div>
+    </div>
+  </div>
+
+  <div class="grid grid-2">
+    <div class="card">
+      <h2 data-i18n="standardLists"></h2>
+      <div id="setup-overview"></div>
+    </div>
+
+    <div class="card">
+      <h2 data-i18n="nextVersion"></h2>
+      <table>
+        <thead>
+          <tr>
+            <th data-i18n="thArea"></th>
+            <th data-i18n="thRecommendation"></th>
+          </tr>
+        </thead>
+        <tbody id="next-version-table"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
 </main></div>
 
 
