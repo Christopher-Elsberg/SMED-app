@@ -813,7 +813,7 @@ async async function undoLastStep(){
     }
   }
 }
-function addStep(){ if(!canUseLive()){ await openInfoModal('Kun admin og editor må registrere live-trin.', 'Adgang'); return; } 
+async function addStep(){ if(!canUseLive()){ await openInfoModal('Kun admin og editor må registrere live-trin.', 'Adgang'); return; } 
   const v=document.getElementById('analysis-video');
   const hasVideo=!!(v && v.src);
 
