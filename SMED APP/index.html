@@ -791,26 +791,21 @@ async function saveAnalysis(){ if(!canEditAnalysis()){ await openInfoModal('Kun 
   document.getElementById('line').value=state.analysis.line;document.getElementById('product').value=state.analysis.product;document.getElementById('changeover-type').value=state.analysis.type;document.getElementById('video-link').value=state.analysis.video||'';document.getElementById('analysis-status').value=state.analysis.status;document.getElementById('target-reduction').value=state.analysis.targetReduction||0;document.getElementById('analysis-comment').value=state.analysis.comment||'';document.getElementById('sop-number').value=state.sop?.number||'SOP-SMED-001';document.getElementById('sop-version').value=state.sop?.version||'0.1';document.getElementById('sop-approver').value=state.sop?.approver||'';document.getElementById('sop-approver-id').value=(state.profilesCache?.nameToId?.[String(state.sop?.approver||'').trim()]||state.profilesCache?.lowerNameToId?.[String(state.sop?.approver||'').trim().toLowerCase()]||'');document.getElementById('sop-scope').value=state.sop?.scope||`${state.analysis.line} - ${state.analysis.type}`;document.getElementById('sop-purpose-text').value=state.sop?.purposeText||'';document.getElementById('sop-scope-text').value=state.sop?.scopeText||'';document.getElementById('sop-roles-text').value=state.sop?.rolesText||'';document.getElementById('timer').textContent=formatTime(state.timerSeconds||0)}
 function totalStepSeconds(){return state.steps.reduce((a,s)=>a+Number(s.duration||0),0)}function typeSeconds(type){return state.steps.filter(s=>s.smedType===type).reduce((a,s)=>a+Number(s.duration||0),0)}function expectedMinutes(){return(state.actions||[]).reduce((a,s)=>a+Number(s.saving||0),0)}function realizedMinutes(){return(state.actions||[]).filter(s=>String(s.status||'')==='Lukket').reduce((a,s)=>a+Number(s.actual_saving||0),0)}function potentialMinutes(){return expectedMinutes()}function pillClass(v){return v==='Intern'?'internal':v==='Ekstern'?'external':'waste'}function statusClass(v){return(v==='Lukket'||v==='Afsluttet')?'status-done':(v==='I gang'||v==='Under analyse')?'status-progress':'status-open'}
 function renderAnalysisSummary(){let rows=[[t('labelSmedId'),state.analysis.id],[t('labelAnalysisName'),state.analysis.name||t('notSpecified')],[t('labelSite'),state.analysis.site],[t('labelLine'),state.analysis.line],[t('labelProduct'),state.analysis.product],[t('labelDate'),state.analysis.date],[t('labelChangeoverType'),lv(state.analysis.type)],[t('labelRegisteredBy'),state.analysis.registeredBy||t('notSpecified')],[t('labelVideoRef'),state.analysis.video||t('notSpecified')],[t('labelStatus'),lv(state.analysis.status)],[t('labelTargetReduction'),`${state.analysis.targetReduction||0}%`],[t('thComment'),state.analysis.comment]];document.getElementById('analysis-summary-table').innerHTML=rows.map(r=>`<tr><th>${escapeHtml(r[0])}</th><td>${escapeHtml(r[1])}</td></tr>`).join('')}
-async async function undoLastStep(){
-  try {
-    if (!state.steps || !state.steps.length) {
-      if (typeof openInfoModal === 'function') {
-        await openInfoModal('Der er ingen registreringer at fortryde.', 'Info');
-      }
+async function undoLastStep(){
+  try{
+    if(!state.steps || !state.steps.length){
+      const statusEl = document.getElementById('last-video-stamp');
+      if(statusEl) statusEl.textContent = (typeof t==='function' ? (t('noTimestampYet') || 'Ingen registreringer at fortryde.') : 'Ingen registreringer at fortryde.');
       return;
     }
 
     state.steps.pop();
 
-    if (typeof saveCurrentState === 'function') saveCurrentState();
-    try { syncStepsOnline(); } catch(e) { console.warn(e); }
-    if (typeof render === 'function') render();
-  } catch (e) {
-    if (typeof openInfoModal === 'function') {
-      await openInfoModal('Kunne ikke fortryde sidste registrering: ' + (e?.message || String(e)), 'Fejl');
-    } else {
-      console.error('Kunne ikke fortryde sidste registrering:', e);
-    }
+    if(typeof saveCurrentState==='function') saveCurrentState();
+    try{ if(typeof syncStepsOnline==='function') syncStepsOnline(); }catch(e){ console.warn(e); }
+    if(typeof render==='function') render();
+  }catch(e){
+    console.error('Kunne ikke fortryde sidste registrering:', e);
   }
 }
 async function addStep(){ if(!canUseLive()){ await openInfoModal('Kun admin og editor må registrere live-trin.', 'Adgang'); return; } 
