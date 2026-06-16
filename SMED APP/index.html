@@ -863,7 +863,7 @@ async function addAction(){
   const priority = document.getElementById('action-priority').value;
   const status = document.getElementById('action-status').value;
   const deadline = document.getElementById('action-deadline').value;
-  const saving = Number(document.getElementById('action-saving').value || 0);
+  const saving = parseFloat(String(document.getElementById('action-saving').value || '0').replace(',', '.')) || 0;
   const note = document.getElementById('action-note').value || '';
 
   // Valider at display name matcher en bruger (ingen dubletter antaget)
@@ -1207,7 +1207,7 @@ async function updateMyActionStatus(actionId){
 
       if(!result) return;
 
-      const actualSaving = Number(String(result.actual).replace(',', '.'));
+      const actualSaving = parseFloat(String(result.actual).replace(',', '.'));
       if(!Number.isFinite(actualSaving) || actualSaving < 0){
         await openInfoModal('Du skal angive en gyldig besparelse', 'Validering');
         return;
