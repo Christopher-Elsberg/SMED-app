@@ -2100,16 +2100,227 @@ function renderDashboard(){
   if(rsEl) rsEl.textContent = String(state.dashboard?.realizedSaving || 0) + ' min';
 }
 
+function getAISampleTimes(video, desiredCount=8){
+  const duration = Number(video?.duration || 0);
+  if(!Number.isFinite(duration) || duration <= 0) return [];
+  const count = Math.max(4, Math.min(desiredCount, Math.floor(duration / 5) || desiredCount));
+  const epsilon = Math.min(0.25, duration / 100);
+  if(count === 1) return [Math.max(0, duration / 2)];
+  const times = [];
+  for(let i=0;i<count;i++){
+    const ratio = count === 1 ? 0.5 : i / (count - 1);
+    const t = Math.max(0, Math.min(duration - epsilon, ratio * duration));
+    times.push(Number(t.toFixed(2)));
+  }
+  return [...new Set(times)];
+}
+
+function seekVideoForFrame(video, second){
+  return new Promise((resolve, reject) => {
+    if(!video) return reject(new Error('Videoelement mangler'));
+    const duration = Number(video.duration || 0);
+    const target = Math.max(0, Math.min(duration || 0, Number(second || 0)));
+    let done = false;
+    const clean = () => {
+      video.removeEventListener('seeked', onSeeked);
+      video.removeEventListener('error', onError);
+    };
+    const finish = () => {
+      if(done) return;
+      done = true;
+      clean();
+      resolve();
+    };
+    const fail = (err) => {
+      if(done) return;
+      done = true;
+      clean();
+      reject(err instanceof Error ? err : new Error(String(err || 'Video seek fejlede')));
+    };
+    const onSeeked = () => requestAnimationFrame(() => requestAnimationFrame(finish));
+    const onError = () => fail(new Error('Kunne ikke læse frame fra video'));
+    video.addEventListener('seeked', onSeeked, { once: true });
+    video.addEventListener('error', onError, { once: true });
+    try{
+      if(Math.abs((video.currentTime || 0) - target) < 0.05){
+        requestAnimationFrame(() => requestAnimationFrame(finish));
+      } else {
+        video.currentTime = target;
+      }
+    }catch(e){
+      fail(e);
+    }
+    setTimeout(() => finish(), 1200);
+  });
+}
+
+function captureCanvasFrameFromVideo(video, opts={}){
+  const quality = Number(opts.quality || 0.72);
+  const maxWidth = Number(opts.maxWidth || 960);
+  const vw = Number(video.videoWidth || 0);
+  const vh = Number(video.videoHeight || 0);
+  if(!vw || !vh) throw new Error('Video metadata mangler');
+  const ratio = vw > maxWidth ? maxWidth / vw : 1;
+  const w = Math.max(1, Math.round(vw * ratio));
+  const h = Math.max(1, Math.round(vh * ratio));
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if(!ctx) throw new Error('Canvas kunne ikke initialiseres');
+  ctx.drawImage(video, 0, 0, w, h);
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
+async function captureVideoFramesForAI(video, desiredCount=8){
+  const times = getAISampleTimes(video, desiredCount);
+  const frames = [];
+  for(const second of times){
+    await seekVideoForFrame(video, second);
+    const image = captureCanvasFrameFromVideo(video, { quality: 0.72, maxWidth: 960 });
+    frames.push({ second, image });
+  }
+  return frames;
+}
+
+function buildExistingStepsForAI(){
+  return Array.isArray(state?.steps)
+    ? state.steps.map((s, i) => ({
+        seq_no: i + 1,
+        name: s?.name || '',
+        start_sec: Number(s?.start || 0),
+        end_sec: Number(s?.end || 0),
+        duration_sec: Number(s?.duration || 0),
+        smed_type: s?.smedType || '',
+        activity_type: s?.activityType || '',
+        waste_type: s?.wasteType || '',
+        comment: s?.comment || ''
+      }))
+    : [];
+}
+
+function renderAISuggestionsHtml(result){
+  const sequences = Array.isArray(result?.sequence_suggestions) ? result.sequence_suggestions : [];
+  const actions = Array.isArray(result?.action_suggestions) ? result.action_suggestions : [];
+  let html = '';
+
+  if(sequences.length){
+    html += '<h3 style="margin:0 0 10px 0">Foreslåede SMED-trin</h3>';
+    html += '<div style="display:grid;gap:10px;margin-bottom:16px">';
+    html += sequences.map((s, i) => `
+      <div style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;background:#f8fafc">
+        <div style="font-weight:700;margin-bottom:6px">${i + 1}. ${escapeHtml(s?.activity || 'Ikke oplyst')}</div>
+        <div><strong>Observation:</strong> ${escapeHtml(s?.observation || 'Ikke oplyst')}</div>
+        <div><strong>Vurdering:</strong> ${escapeHtml(s?.assessment || 'Ikke oplyst')}</div>
+        <div><strong>Antagelse:</strong> ${escapeHtml(s?.assumption || '')}</div>
+        <div><strong>SMED-type:</strong> ${escapeHtml(s?.suggested_smed_type || 'Ikke oplyst')}</div>
+        <div><strong>Aktivitetstype:</strong> ${escapeHtml(s?.suggested_activity_type || 'Ikke oplyst')}</div>
+        <div><strong>Spildtype:</strong> ${escapeHtml(s?.suggested_waste_type || 'Ikke oplyst')}</div>
+        ${s?.start_sec != null || s?.end_sec != null ? `<div><strong>Tid:</strong> ${escapeHtml(formatTime(Number(s?.start_sec || 0)))} - ${escapeHtml(formatTime(Number(s?.end_sec || 0)))}</div>` : ''}
+      </div>
+    `).join('');
+    html += '</div>';
+  }
+
+  if(actions.length){
+    html += '<h3 style="margin:0 0 10px 0">Foreslåede actions</h3>';
+    html += '<div style="display:grid;gap:10px">';
+    html += actions.map((a, i) => `
+      <div style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;background:#ffffff">
+        <div style="font-weight:700;margin-bottom:6px">${i + 1}. ${escapeHtml(a?.title || 'Ikke oplyst')}</div>
+        <div><strong>Begrundelse:</strong> ${escapeHtml(a?.reason || 'Ikke oplyst')}</div>
+        <div><strong>Forventet effekt:</strong> ${escapeHtml(a?.expected_effect || 'Ikke oplyst')}</div>
+        <div><strong>Prioritet:</strong> ${escapeHtml(a?.priority || 'Ikke oplyst')}</div>
+      </div>
+    `).join('');
+    html += '</div>';
+  }
+
+  if(!html){
+    html = `<pre style="white-space:pre-wrap">${escapeHtml(JSON.stringify(result, null, 2))}</pre>`;
+  }
+  return html;
+}
+
 async function runAISuggestions(){
+  const video = document.getElementById('analysis-video');
+  if(!video || !video.src){
+    await openInfoModal('Indlæs en video først, før du tester AI.', 'AI test');
+    return;
+  }
+  if(!Number.isFinite(video.duration) || video.duration <= 0 || !video.videoWidth){
+    await openInfoModal('Vent til videoen er indlæst helt, og prøv igen.', 'AI test');
+    return;
+  }
+
+  const aiBtn = document.querySelector('button[onclick="runAISuggestions()"]');
+  const previousBtnText = aiBtn?.textContent || '';
+  const wasPaused = video.paused;
+  const previousTime = Number(video.currentTime || 0);
+  const previousRate = Number(video.playbackRate || 1);
+
   try{
-    const data = await callApi('ai.smed_analyze', {});
-    if(!data?.ok){
+    if(aiBtn){
+      aiBtn.disabled = true;
+      aiBtn.textContent = 'AI analyserer video...';
+    }
+
+    video.pause();
+    const frames = await captureVideoFramesForAI(video, 8);
+
+    await seekVideoForFrame(video, previousTime);
+    video.playbackRate = previousRate;
+    if(!wasPaused) video.play().catch(() => {});
+    updateVideoTimeDisplay();
+
+    const observationBlocks = [
+      document.getElementById('video-observation')?.value || '',
+      document.getElementById('step-comment')?.value || '',
+      document.getElementById('last-video-stamp')?.textContent || ''
+    ].map(v => String(v || '').trim()).filter(Boolean);
+
+    const payload = {
+      factory: state?.analysis?.site || '',
+      line: state?.analysis?.line || '',
+      changeoverType: state?.analysis?.type || '',
+      fromProductFormat: state?.analysis?.product || '',
+      toProductFormat: '',
+      currentChangeoverTime: formatTime(Number(video.duration || 0)),
+      transcript: '',
+      observation: observationBlocks.join(' | '),
+      knownProblems: '',
+      goal: '',
+      video_duration_sec: Number(video.duration || 0),
+      current_video_time_sec: Number(previousTime || 0),
+      frames,
+      existing_steps: buildExistingStepsForAI()
+    };
+
+    const data = await callApi('ai.smed_analyze', payload);
+    if(!data?.ok && !data?.result && !data?.text){
       throw new Error(data?.error || 'Ingen gyldig respons fra AI');
     }
-    await openInfoModal(data.text || 'Ingen respons', 'AI test');
+
+    const result = data?.result || data;
+    if(result?.sequence_suggestions || result?.action_suggestions){
+      showAIModal('AI forslag til SMED-trin', renderAISuggestionsHtml(result));
+    } else {
+      await openInfoModal(data?.text || result?.text || 'Ingen respons', 'AI test');
+    }
   }catch(e){
+    try{
+      await seekVideoForFrame(video, previousTime);
+      video.playbackRate = previousRate;
+      if(!wasPaused) video.play().catch(() => {});
+      updateVideoTimeDisplay();
+    }catch(_err){}
     console.error('AI fejl:', e);
     await openInfoModal('AI fejl: ' + (e?.message || String(e)), 'Fejl');
+  }finally{
+    if(aiBtn){
+      aiBtn.disabled = false;
+      aiBtn.textContent = previousBtnText || 'AI forslag';
+    }
   }
 }
 function showAIModal(title, bodyHtml){
