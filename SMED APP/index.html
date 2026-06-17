@@ -2102,69 +2102,16 @@ function renderDashboard(){
 
 async function runAISuggestions(){
   try{
-    const payload = {
-      factory: state?.analysis?.site || "",
-      line: state?.analysis?.line || "",
-      changeoverType: state?.analysis?.type || "",
-      fromProductFormat: state?.analysis?.product || "",
-      toProductFormat: "",
-      currentChangeoverTime: "",
-      transcript: "",
-      observation: document.getElementById('step-comment')?.value || document.getElementById('video-observation')?.value || "",
-      knownProblems: "",
-      goal: ""
-    };
-
-    const data = await callApi('ai.smed_analyze', payload);
-    const result = data?.result || data;
-
-    const sequences = Array.isArray(result?.sequence_suggestions) ? result.sequence_suggestions : [];
-    const actions = Array.isArray(result?.action_suggestions) ? result.action_suggestions : [];
-
-    let html = '';
-
-    if(sequences.length){
-      html += '<h3 style="margin:0 0 10px 0">Foreslåede sekvenser</h3>';
-      html += '<div style="display:grid;gap:10px;margin-bottom:16px">';
-      html += sequences.map((s, i) => `
-        <div style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;background:#f8fafc">
-          <div style="font-weight:700;margin-bottom:6px">${i + 1}. ${escapeHtml(s?.activity || 'Ikke oplyst')}</div>
-          <div><strong>Observation:</strong> ${escapeHtml(s?.observation || 'Ikke oplyst')}</div>
-          <div><strong>Vurdering:</strong> ${escapeHtml(s?.assessment || 'Ikke oplyst')}</div>
-          <div><strong>Antagelse:</strong> ${escapeHtml(s?.assumption || 'Ikke oplyst')}</div>
-          <div><strong>SMED-type:</strong> ${escapeHtml(s?.suggested_smed_type || 'Ikke oplyst')}</div>
-          <div><strong>Aktivitetstype:</strong> ${escapeHtml(s?.suggested_activity_type || 'Ikke oplyst')}</div>
-          <div><strong>Spildtype:</strong> ${escapeHtml(s?.suggested_waste_type || 'Ikke oplyst')}</div>
-        </div>
-      `).join('');
-      html += '</div>';
+    const data = await callApi('ai.smed_analyze', {});
+    if(!data?.ok){
+      throw new Error(data?.error || 'Ingen gyldig respons fra AI');
     }
-
-    if(actions.length){
-      html += '<h3 style="margin:0 0 10px 0">Foreslåede actions</h3>';
-      html += '<div style="display:grid;gap:10px">';
-      html += actions.map((a, i) => `
-        <div style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;background:#ffffff">
-          <div style="font-weight:700;margin-bottom:6px">${i + 1}. ${escapeHtml(a?.title || 'Ikke oplyst')}</div>
-          <div><strong>Begrundelse:</strong> ${escapeHtml(a?.reason || 'Ikke oplyst')}</div>
-          <div><strong>Forventet effekt:</strong> ${escapeHtml(a?.expected_effect || 'Ikke oplyst')}</div>
-          <div><strong>Prioritet:</strong> ${escapeHtml(a?.priority || 'Ikke oplyst')}</div>
-        </div>
-      `).join('');
-      html += '</div>';
-    }
-
-    if(!html){
-      html = '<div>AI returnerede ingen forslag.</div>';
-    }
-
-    showAIModal('AI forslag', html);
+    await openInfoModal(data.text || 'Ingen respons', 'AI test');
   }catch(e){
     console.error('AI fejl:', e);
     await openInfoModal('AI fejl: ' + (e?.message || String(e)), 'Fejl');
   }
 }
-
 function showAIModal(title, bodyHtml){
   let modal = document.getElementById('ai-result-modal');
 
