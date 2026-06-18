@@ -2177,19 +2177,28 @@ function renderDashboard(){
   if(rsEl) rsEl.textContent = String(state.dashboard?.realizedSaving || 0) + ' min';
 }
 
-function getAISampleTimes(video, desiredCount=8){
+function getAISampleTimes(video){
   const duration = Number(video?.duration || 0);
   if(!Number.isFinite(duration) || duration <= 0) return [];
-  const count = Math.max(4, Math.min(desiredCount, Math.floor(duration / 5) || desiredCount));
-  const epsilon = Math.min(0.25, duration / 100);
-  if(count === 1) return [Math.max(0, duration / 2)];
-  const times = [];
-  for(let i=0;i<count;i++){
-    const ratio = count === 1 ? 0.5 : i / (count - 1);
-    const t = Math.max(0, Math.min(duration - epsilon, ratio * duration));
-    times.push(Number(t.toFixed(2)));
+
+  let step = 3;
+
+  if(duration < 300){
+    step = 3; // <5 min
+  } else if(duration <= 1200){
+    step = 10; // 5–20 min
+  } else {
+    step = 30; // >20 min
   }
-  return [...new Set(times)];
+
+  const epsilon = Math.min(0.25, duration / 100);
+  const times = [];
+
+  for(let sec = 0; sec < Math.floor(duration); sec += step){
+    times.push(Math.max(0, Math.min(duration - epsilon, sec)));
+  }
+
+  return times;
 }
 
 function seekVideoForFrame(video, second){
