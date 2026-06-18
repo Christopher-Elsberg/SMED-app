@@ -2222,6 +2222,74 @@ async function captureVideoFramesForAI(video, desiredCount=8){
   }
   return frames;
 }
+function waitForVideoMetadata(video, timeoutMs=15000){
+  return new Promise((resolve, reject) => {
+    if(!video) return reject(new Error('Videoelement mangler'));
+    if(Number.isFinite(video.duration) && video.duration > 0 && video.videoWidth){
+      resolve(video);
+      return;
+    }
+    let done = false;
+    let timeout = null;
+    const clean = () => {
+      video.removeEventListener('loadedmetadata', onReady);
+      video.removeEventListener('canplay', onReady);
+      video.removeEventListener('error', onError);
+      if(timeout) clearTimeout(timeout);
+    };
+    const finish = () => {
+      if(done) return;
+      done = true;
+      clean();
+      resolve(video);
+    };
+    const fail = (err) => {
+      if(done) return;
+      done = true;
+      clean();
+      reject(err instanceof Error ? err : new Error(String(err || 'Kunne ikke indlæse video til AI')));
+    };
+    const onReady = () => {
+      if(Number.isFinite(video.duration) && video.duration > 0 && video.videoWidth){
+        finish();
+      }
+    };
+    const onError = () => fail(new Error('Kunne ikke indlæse baggrundsvideo til AI'));
+    timeout = setTimeout(() => fail(new Error('Timeout ved indlæsning af baggrundsvideo til AI')), timeoutMs);
+    video.addEventListener('loadedmetadata', onReady);
+    video.addEventListener('canplay', onReady);
+    video.addEventListener('error', onError, { once:true });
+  });
+}
+async function createHiddenAIVideoFromCurrentSource(){
+  const sourceVideo = document.getElementById('analysis-video');
+  const src = sourceVideo?.currentSrc || sourceVideo?.src || '';
+  if(!src) throw new Error('Ingen video er indlæst');
+  const aiVideo = document.createElement('video');
+  aiVideo.preload = 'auto';
+  aiVideo.muted = true;
+  aiVideo.playsInline = true;
+  aiVideo.setAttribute('aria-hidden','true');
+  aiVideo.tabIndex = -1;
+  aiVideo.style.position = 'fixed';
+  aiVideo.style.left = '-99999px';
+  aiVideo.style.top = '0';
+  aiVideo.style.width = '1px';
+  aiVideo.style.height = '1px';
+  aiVideo.style.opacity = '0';
+  aiVideo.style.pointerEvents = 'none';
+  aiVideo.src = src;
+  document.body.appendChild(aiVideo);
+  aiVideo.load();
+  await waitForVideoMetadata(aiVideo);
+  return aiVideo;
+}
+function destroyHiddenAIVideo(aiVideo){
+  if(!aiVideo) return;
+  try{ aiVideo.pause(); }catch(_e){}
+  try{ aiVideo.removeAttribute('src'); aiVideo.load(); }catch(_e){}
+  try{ aiVideo.remove(); }catch(_e){}
+}
 
 function buildExistingStepsForAI(){
   return Array.isArray(state?.steps)
@@ -2370,102 +2438,84 @@ function applyAISuggestionsToSteps(sequenceSuggestions){
   return mapped.length;
 }
 
-async function runAISuggestions(){
-  const video = document.getElementById('analysis-video');
-  if(!video || !video.src){
-    await openInfoModal('Indlæs en video først, før du tester AI.', 'AI test');
-    return;
-  }
-  if(!Number.isFinite(video.duration) || video.duration <= 0 || !video.videoWidth){
-    await openInfoModal('Vent til videoen er indlæst helt, og prøv igen.', 'AI test');
-    return;
-  }
-
-  const aiBtn = document.querySelector('button[onclick="runAISuggestions()"]');
-  const previousBtnText = aiBtn?.textContent || '';
-  const wasPaused = video.paused;
-  const previousTime = Number(video.currentTime || 0);
-  const previousRate = Number(video.playbackRate || 1);
-
-  try{
-    if(aiBtn){
-      aiBtn.disabled = true;
-      aiBtn.textContent = 'AI analyserer video...';
-    }
-
-    video.pause();
-    const frames = await captureVideoFramesForAI(video, 8);
-
-    await seekVideoForFrame(video, previousTime);
-    video.playbackRate = previousRate;
-    if(!wasPaused) video.play().catch(() => {});
-    updateVideoTimeDisplay();
-
-    const observationBlocks = [
-      document.getElementById('video-observation')?.value || '',
-      document.getElementById('step-comment')?.value || ''
-    ].map(v => String(v || '').trim()).filter(Boolean);
-
-    const payload = {
-      factory: state?.analysis?.site || '',
-      line: state?.analysis?.line || '',
-      changeoverType: state?.analysis?.type || '',
-      fromProductFormat: state?.analysis?.product || '',
-      toProductFormat: '',
-      currentChangeoverTime: formatTime(Number(video.duration || 0)),
-      transcript: '',
-      observation: observationBlocks.join(' | '),
-      knownProblems: '',
-      goal: '',
-      video_duration_sec: Number(video.duration || 0),
-      current_video_time_sec: Number(previousTime || 0),
-      frames,
-      existing_steps: buildExistingStepsForAI(),
-      allowed_categories: {
-        smedTypes: state?.setup?.smedTypes || [],
-        activityTypes: state?.setup?.activityTypes || [],
-        wasteTypes: state?.setup?.wasteTypes || []
-      }
-    };
-
-    const data = await callApi('ai.smed_analyze', payload);
-    if(!data?.ok && !data?.result && !data?.text){
-      throw new Error(data?.error || 'Ingen gyldig respons fra AI');
-    }
-
-    const result = data?.result || data;
-    const suggestions = Array.isArray(result?.sequence_suggestions) ? result.sequence_suggestions : [];
-
-    if(!suggestions.length){
-      await openInfoModal('AI returnerede ingen SMED-trin.', 'AI forslag');
-      return;
-    }
-
-    state.aiPendingSuggestions = suggestions;
-    saveCurrentState();
-    render();
-    await goToSection('live');
-
-    const actionCount = Array.isArray(result?.action_suggestions) ? result.action_suggestions.length : 0;
-    const statusMsg = actionCount > 0
-      ? `${t('aiSuggestionsReady')} ${t('aiActionSuggestionsNote', { count: actionCount })}`
-      : t('aiSuggestionsReady');
-    setVideoStatus(statusMsg);
-  }catch(e){
-    try{
-      await seekVideoForFrame(video, previousTime);
-      video.playbackRate = previousRate;
-      if(!wasPaused) video.play().catch(() => {});
-      updateVideoTimeDisplay();
-    }catch(_err){}
-    console.error('AI fejl:', e);
-    await openInfoModal('AI fejl: ' + (e?.message || String(e)), 'Fejl');
-  }finally{
-    if(aiBtn){
-      aiBtn.disabled = false;
-      aiBtn.textContent = previousBtnText || 'AI forslag';
-    }
-  }
+async function runAISuggestions(){  
+  const video = document.getElementById('analysis-video');  
+  if(!video || !video.src){  
+    await openInfoModal('Indlæs en video først, før du tester AI.', 'AI test');  
+    return;  
+  }  
+  if(!Number.isFinite(video.duration) || video.duration <= 0 || !video.videoWidth){  
+    await openInfoModal('Vent til videoen er indlæst helt, og prøv igen.', 'AI test');  
+    return;  
+  }  
+  const aiBtn = document.querySelector('button[onclick="runAISuggestions()"]');  
+  const previousBtnText = aiBtn?.textContent || '';  
+  const previousTime = Number(video.currentTime || 0);  
+  let aiVideo = null;  
+  try{  
+    if(aiBtn){  
+      aiBtn.disabled = true;  
+      aiBtn.textContent = 'AI analyserer video...';  
+    }  
+    setVideoStatus('AI analyserer i baggrunden...');
+    aiVideo = await createHiddenAIVideoFromCurrentSource();
+    const frames = await captureVideoFramesForAI(aiVideo, 8);  
+    const observationBlocks = [  
+      document.getElementById('video-observation')?.value || '',  
+      document.getElementById('step-comment')?.value || ''  
+    ].map(v => String(v || '').trim()).filter(Boolean);  
+    const payload = {  
+      factory: state?.analysis?.site || '',  
+      line: state?.analysis?.line || '',  
+      changeoverType: state?.analysis?.type || '',  
+      fromProductFormat: state?.analysis?.product || '',  
+      toProductFormat: '',  
+      currentChangeoverTime: formatTime(Number(aiVideo.duration || video.duration || 0)),  
+      transcript: '',  
+      observation: observationBlocks.join(' | '),  
+      knownProblems: '',  
+      goal: '',  
+      video_duration_sec: Number(aiVideo.duration || video.duration || 0),  
+      current_video_time_sec: Number(previousTime || 0),  
+      frames,  
+      existing_steps: buildExistingStepsForAI(),  
+      allowed_categories: {  
+        smedTypes: state?.setup?.smedTypes || [],  
+        activityTypes: state?.setup?.activityTypes || [],  
+        wasteTypes: state?.setup?.wasteTypes || []  
+      }  
+    };  
+    const data = await callApi('ai.smed_analyze', payload);  
+    if(!data?.ok && !data?.result && !data?.text){  
+      throw new Error(data?.error || 'Ingen gyldig respons fra AI');  
+    }  
+    const result = data?.result || data;  
+    const suggestions = Array.isArray(result?.sequence_suggestions) ? result.sequence_suggestions : [];  
+    if(!suggestions.length){  
+      await openInfoModal('AI returnerede ingen SMED-trin.', 'AI forslag');  
+      setVideoStatus('AI returnerede ingen SMED-trin.');
+      return;  
+    }  
+    state.aiPendingSuggestions = suggestions;  
+    saveCurrentState();  
+    render();  
+    await goToSection('live');  
+    const actionCount = Array.isArray(result?.action_suggestions) ? result.action_suggestions.length : 0;  
+    const statusMsg = actionCount > 0  
+      ? `${t('aiSuggestionsReady')} ${t('aiActionSuggestionsNote', { count: actionCount })}`  
+      : t('aiSuggestionsReady');  
+    setVideoStatus(statusMsg);  
+  }catch(e){  
+    console.error('AI fejl:', e);  
+    await openInfoModal('AI fejl: ' + (e?.message || String(e)), 'Fejl');  
+    setVideoStatus('AI fejl: ' + (e?.message || String(e)), true);
+  }finally{  
+    destroyHiddenAIVideo(aiVideo);
+    if(aiBtn){  
+      aiBtn.disabled = false;  
+      aiBtn.textContent = previousBtnText || 'AI forslag';  
+    }  
+  }  
 }
 function showAIModal(title, bodyHtml){
   let modal = document.getElementById('ai-result-modal');
