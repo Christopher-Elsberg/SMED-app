@@ -2181,20 +2181,12 @@ function getAISampleTimes(video){
   const duration = Number(video?.duration || 0);
   if(!Number.isFinite(duration) || duration <= 0) return [];
 
-  let step = 3;
-
-  if(duration < 300){
-    step = 3; // <5 min
-  } else if(duration <= 1200){
-    step = 10; // 5–20 min
-  } else {
-    step = 30; // >20 min
-  }
-
+  const step = 3; // FAST: 1 frame hver 3. sekund
   const epsilon = Math.min(0.25, duration / 100);
+
   const times = [];
 
-  for(let sec = 0; sec < Math.floor(duration); sec += step){
+  for(let sec = 0; sec < duration; sec += step){
     times.push(Math.max(0, Math.min(duration - epsilon, sec)));
   }
 
