@@ -2327,7 +2327,12 @@ async function runAISuggestions(){
       video_duration_sec: Number(video.duration || 0),
       current_video_time_sec: Number(previousTime || 0),
       frames,
-      existing_steps: buildExistingStepsForAI()
+      existing_steps: buildExistingStepsForAI(),
+      allowed_categories: {
+        smedTypes: state?.setup?.smedTypes || [],
+        activityTypes: state?.setup?.activityTypes || [],
+        wasteTypes: state?.setup?.wasteTypes || []
+      }
     };
 
     const data = await callApi('ai.smed_analyze', payload);
