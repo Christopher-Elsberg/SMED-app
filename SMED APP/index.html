@@ -2177,21 +2177,22 @@ function renderDashboard(){
   if(rsEl) rsEl.textContent = String(state.dashboard?.realizedSaving || 0) + ' min';
 }
 
-function getAISampleTimes(video){
+function getAISampleTimes(video, desiredCount = 40){
   const duration = Number(video?.duration || 0);
-  if(!Number.isFinite(duration) || duration <= 0) return [];
+  if (!Number.isFinite(duration) || duration <= 0) return [];
 
-  const step = 3; // FAST: 1 frame hver 3. sekund
+  const step = duration / desiredCount;
   const epsilon = Math.min(0.25, duration / 100);
 
   const times = [];
-
-  for(let sec = 0; sec < duration; sec += step){
+  for (let i = 0; i < desiredCount; i++){
+    const sec = i * step;
     times.push(Math.max(0, Math.min(duration - epsilon, sec)));
   }
 
   return times;
 }
+``
 
 function seekVideoForFrame(video, second){
   return new Promise((resolve, reject) => {
@@ -2250,14 +2251,21 @@ function captureCanvasFrameFromVideo(video, opts={}){
   return canvas.toDataURL('image/jpeg', quality);
 }
 
-async function captureVideoFramesForAI(video, desiredCount=8){
+async function captureVideoFramesForAI(video, desiredCount = 40){
   const times = getAISampleTimes(video, desiredCount);
   const frames = [];
-  for(const second of times){
+
+  for (const second of times){
     await seekVideoForFrame(video, second);
-    const image = captureCanvasFrameFromVideo(video, { quality: 0.72, maxWidth: 960 });
+
+    const image = captureCanvasFrameFromVideo(video, {
+      quality: 0.7,
+      maxWidth: 720
+    });
+
     frames.push({ second, image });
   }
+
   return frames;
 }
 function waitForVideoMetadata(video, timeoutMs=15000){
@@ -2497,7 +2505,7 @@ async function runAISuggestions(){
     }  
     setVideoStatus('AI analyserer i baggrunden...');
     aiVideo = await createHiddenAIVideoFromCurrentSource();
-    const frames = await captureVideoFramesForAI(aiVideo, 8);  
+    const frames = await captureVideoFramesForAI(aiVideo, 40);  
     const observationBlocks = [  
       document.getElementById('video-observation')?.value || '',  
       document.getElementById('step-comment')?.value || ''  
