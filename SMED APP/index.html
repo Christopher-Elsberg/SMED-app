@@ -2250,7 +2250,7 @@ function captureCanvasFrameFromVideo(video, opts={}){
   return canvas.toDataURL('image/jpeg', quality);
 }
 
-async function captureVideoFramesForAI(video, desiredCount=8){
+async function captureVideoFramesForAI(video, desiredCount=300){
   const times = getAISampleTimes(video, desiredCount);
   const frames = [];
   for(const second of times){
