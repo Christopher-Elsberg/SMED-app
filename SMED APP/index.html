@@ -2242,6 +2242,40 @@ function renderAISuggestionsHtml(result){
   return html;
 }
 
+function applyAISuggestionsToSteps(sequenceSuggestions){
+  if(!Array.isArray(sequenceSuggestions) || !sequenceSuggestions.length) return 0;
+
+  const mapped = sequenceSuggestions.map((s, idx) => {
+    const rawStart = Number(s?.start_sec ?? 0);
+    const rawEnd = Number(s?.end_sec ?? rawStart);
+    const start = Math.max(0, isFinite(rawStart) ? Math.round(rawStart) : 0);
+    const end = Math.max(start, isFinite(rawEnd) ? Math.round(rawEnd) : start);
+    const duration = Math.max(0, end - start);
+
+    const commentParts = [
+      'AI-forslag',
+      s?.observation ? `Observation: ${s.observation}` : '',
+      s?.assessment ? `Vurdering: ${s.assessment}` : '',
+      s?.assumption ? `Antagelse: ${s.assumption}` : '',
+      s?.requires_verification ? 'Kræver verifikation' : ''
+    ].filter(Boolean);
+
+    return {
+      name: s?.activity || `AI trin ${idx + 1}`,
+      start,
+      end,
+      duration,
+      smedType: s?.suggested_smed_type || 'Intern',
+      activityType: s?.suggested_activity_type || 'Forberedelse',
+      wasteType: s?.suggested_waste_type || 'Ingen',
+      comment: commentParts.join(' | ')
+    };
+  });
+
+  state.steps.push(...mapped);
+  return mapped.length;
+}
+
 async function runAISuggestions(){
   const video = document.getElementById('analysis-video');
   if(!video || !video.src){
@@ -2302,11 +2336,24 @@ async function runAISuggestions(){
     }
 
     const result = data?.result || data;
-    if(result?.sequence_suggestions || result?.action_suggestions){
-      showAIModal('AI forslag til SMED-trin', renderAISuggestionsHtml(result));
-    } else {
-      await openInfoModal(data?.text || result?.text || 'Ingen respons', 'AI test');
+    const suggestions = Array.isArray(result?.sequence_suggestions) ? result.sequence_suggestions : [];
+
+    if(!suggestions.length){
+      await openInfoModal('AI returnerede ingen SMED-trin.', 'AI forslag');
+      return;
     }
+
+    const inserted = applyAISuggestionsToSteps(suggestions);
+    saveCurrentState();
+    try{ await syncStepsOnline(); }catch(e){ console.warn(e); }
+    render();
+    await goToSection('live');
+
+    const actionCount = Array.isArray(result?.action_suggestions) ? result.action_suggestions.length : 0;
+    const msg = actionCount > 0
+      ? `${inserted} AI-forslag er indsat som trin i appen. AI returnerede også ${actionCount} actionforslag (vises ikke automatisk endnu).`
+      : `${inserted} AI-forslag er indsat som trin i appen.`;
+    await openInfoModal(msg, 'AI forslag');
   }catch(e){
     try{
       await seekVideoForFrame(video, previousTime);
